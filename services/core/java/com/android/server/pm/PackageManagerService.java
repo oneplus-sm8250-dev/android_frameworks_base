@@ -7141,7 +7141,7 @@ public class PackageManagerService extends IPackageManager.Stub
         }
 
         PackageManagerService m = new PackageManagerService(injector, onlyCore, factoryTest,
-                Build.FINGERPRINT, Build.IS_ENG, Build.IS_USERDEBUG, Build.VERSION.SDK_INT,
+                Build.VERSION.INCREMENTAL, Build.IS_ENG, Build.IS_USERDEBUG, Build.VERSION.SDK_INT,
                 Build.VERSION.INCREMENTAL);
         t.traceEnd(); // "create package manager"
 
@@ -7636,7 +7636,7 @@ public class PackageManagerService extends IPackageManager.Stub
                     !buildFingerprint.equals(ver.fingerprint);
             if (mIsUpgrade) {
                 PackageManagerServiceUtils.logCriticalInfo(Log.INFO,
-                        "Upgrading from " + ver.fingerprint + " to " + Build.FINGERPRINT);
+                        "Upgrading from " + ver.fingerprint + " to " + Build.VERSION.INCREMENTAL);
             }
 
             // when upgrading from pre-M, promote system app permissions from install to runtime
@@ -8023,8 +8023,9 @@ public class PackageManagerService extends IPackageManager.Stub
             // allow...  it would be nice to have some better way to handle
             // this situation.
             if (mIsUpgrade) {
-                Slog.i(TAG, "Build fingerprint changed from " + ver.fingerprint + " to "
-                        + Build.FINGERPRINT + "; regranting permissions for internal storage");
+                Slog.i(TAG, "Build incremental version changed from " + ver.fingerprint + " to "
+                        + Build.VERSION.INCREMENTAL +
+                        "; regranting permissions for internal storage");
             }
             mPermissionManager.onStorageVolumeMounted(
                     StorageManager.UUID_PRIVATE_INTERNAL, mIsUpgrade);
@@ -8107,7 +8108,7 @@ public class PackageManagerService extends IPackageManager.Stub
             // across OTAs and are used to drive profile verification (post OTA) and
             // profile compilation (without waiting to collect a fresh set of profiles).
             if (mIsUpgrade && !mOnlyCore) {
-                Slog.i(TAG, "Build fingerprint changed; clearing code caches");
+                Slog.i(TAG, "Build incremental version changed; clearing code caches");
                 for (int i = 0; i < packageSettings.size(); i++) {
                     final PackageSetting ps = packageSettings.valueAt(i);
                     if (Objects.equals(StorageManager.UUID_PRIVATE_INTERNAL, ps.volumeUuid)) {
@@ -8118,7 +8119,7 @@ public class PackageManagerService extends IPackageManager.Stub
                                         | Installer.FLAG_CLEAR_APP_DATA_KEEP_ART_PROFILES);
                     }
                 }
-                ver.fingerprint = Build.FINGERPRINT;
+                ver.fingerprint = Build.VERSION.INCREMENTAL;
             }
 
             // Legacy existing (installed before Q) non-system apps to hide
@@ -8626,7 +8627,7 @@ public class PackageManagerService extends IPackageManager.Stub
         // identify cached items. In particular, changing the value of certain
         // feature flags should cause us to invalidate any caches.
         final String cacheName = FORCE_PACKAGE_PARSED_CACHE_ENABLED ? "debug"
-                : SystemProperties.digestOf("ro.build.fingerprint");
+                : SystemProperties.digestOf("ro.build.version.incremental");
 
         // Reconcile cache directories, keeping only what we'd actually use.
         for (File cacheDir : FileUtils.listFilesOrEmpty(cacheBaseDir)) {
@@ -25758,7 +25759,7 @@ public class PackageManagerService extends IPackageManager.Stub
                     Slog.w(TAG, "Failed to scan " + ps.getPath() + ": " + e.getMessage());
                 }
 
-                if (!Build.FINGERPRINT.equals(ver.fingerprint)) {
+                if (!Build.VERSION.INCREMENTAL.equals(ver.fingerprint)) {
                     clearAppDataLIF(ps.pkg, UserHandle.USER_ALL, FLAG_STORAGE_DE | FLAG_STORAGE_CE
                             | FLAG_STORAGE_EXTERNAL | Installer.FLAG_CLEAR_CODE_CACHE_ONLY
                             | Installer.FLAG_CLEAR_APP_DATA_KEEP_ART_PROFILES);
@@ -25796,10 +25797,11 @@ public class PackageManagerService extends IPackageManager.Stub
         }
 
         synchronized (mLock) {
-            final boolean isUpgrade = !Build.FINGERPRINT.equals(ver.fingerprint);
+            final boolean isUpgrade = !Build.VERSION.INCREMENTAL.equals(ver.fingerprint);
             if (isUpgrade) {
-                logCriticalInfo(Log.INFO, "Build fingerprint changed from " + ver.fingerprint
-                        + " to " + Build.FINGERPRINT + "; regranting permissions for "
+                logCriticalInfo(Log.INFO, "Build incremental version changed from "
+                        + ver.fingerprint
+                        + " to " + Build.VERSION.INCREMENTAL + "; regranting permissions for "
                         + volumeUuid);
             }
             mPermissionManager.onStorageVolumeMounted(volumeUuid, isUpgrade);
