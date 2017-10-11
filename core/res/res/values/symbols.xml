@@ -4469,4 +4469,8 @@
   <java-symbol type="color" name="overview_background"/>
 
   <java-symbol type="integer" name="config_maximumDelayTimeToDeactivateDataCall" />
+
+  <!-- Device keyhandlers -->
+  <java-symbol type="array" name="config_deviceKeyHandlerLibs" />
+  <java-symbol type="array" name="config_deviceKeyHandlerClasses" />
 </resources>
