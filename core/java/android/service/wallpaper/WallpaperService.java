@@ -966,6 +966,7 @@ public abstract class WallpaperService extends Service {
         void updateSurface(boolean forceRelayout, boolean forceReport, boolean redrawNeeded) {
             if (mDestroyed) {
                 Log.w(TAG, "Ignoring updateSurface due to destroyed");
+                return;
             }
 
             boolean fixedSize = false;
@@ -2178,7 +2179,7 @@ public abstract class WallpaperService extends Service {
                     return;
                 }
                 case MSG_UPDATE_SURFACE:
-                    mEngine.updateSurface(true, false, false);
+                    mEngine.updateSurface(true, false, true/*false*/);
                     break;
                 case MSG_ZOOM:
                     mEngine.setZoom(Float.intBitsToFloat(message.arg1));

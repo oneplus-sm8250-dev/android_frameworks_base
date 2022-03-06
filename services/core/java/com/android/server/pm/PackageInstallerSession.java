@@ -133,6 +133,7 @@ import android.util.SparseArray;
 import android.util.TypedXmlPullParser;
 import android.util.TypedXmlSerializer;
 import android.util.apk.ApkSignatureVerifier;
+import android.util.BoostFramework;
 
 import com.android.internal.R;
 import com.android.internal.annotations.GuardedBy;
@@ -276,6 +277,13 @@ public class PackageInstallerSession extends IPackageInstallerSession.Stub {
      * Note all calls must be done outside {@link #mLock} to prevent lock inversion.
      */
     private final StagingManager mStagingManager;
+
+    /*
+    * @hide
+    */
+    private BoostFramework mPerfBoostInstall = null;
+    private boolean mIsPerfLockAcquired = false;
+    private final int MAX_INSTALL_DURATION = 20000;
 
     final int sessionId;
     final int userId;
@@ -673,7 +681,7 @@ public class PackageInstallerSession extends IPackageInstallerSession.Stub {
             final Runnable r;
             synchronized (mLock) {
                 assertNotChildLocked("StagedSession#abandon");
-                assertCallerIsOwnerOrRoot();
+                assertCallerIsOwnerOrRootOrSystem();
                 if (isInTerminalState()) {
                     // We keep the session in the database if it's in a finalized state. It will be
                     // removed by PackageInstallerService when the last update time is old enough.
@@ -1455,6 +1463,14 @@ public class PackageInstallerSession extends IPackageInstallerSession.Stub {
     public ParcelFileDescriptor openWrite(String name, long offsetBytes, long lengthBytes) {
         assertCanWrite(false);
         try {
+            if (mPerfBoostInstall == null){
+                mPerfBoostInstall = new BoostFramework();
+            }
+            if (mPerfBoostInstall != null && !mIsPerfLockAcquired) {
+                mPerfBoostInstall.perfHint(BoostFramework.VENDOR_HINT_PACKAGE_INSTALL_BOOST,
+                        null, MAX_INSTALL_DURATION, -1);
+                mIsPerfLockAcquired = true;
+            }
             return doWriteInternal(name, offsetBytes, lengthBytes, null);
         } catch (IOException e) {
             throw ExceptionUtils.wrap(e);
@@ -1684,6 +1700,10 @@ public class PackageInstallerSession extends IPackageInstallerSession.Stub {
 
     @Override
     public void commit(@NonNull IntentSender statusReceiver, boolean forTransfer) {
+        if (mIsPerfLockAcquired && mPerfBoostInstall != null) {
+            mPerfBoostInstall.perfLockRelease();
+            mIsPerfLockAcquired = false;
+        }
         if (hasParentSessionId()) {
             throw new IllegalStateException(
                     "Session " + sessionId + " is a child of multi-package session "
@@ -3702,9 +3722,10 @@ public class PackageInstallerSession extends IPackageInstallerSession.Stub {
     }
 
     private void abandonNonStaged() {
+
         synchronized (mLock) {
             assertNotChildLocked("abandonNonStaged");
-            assertCallerIsOwnerOrRoot();
+            assertCallerIsOwnerOrRootOrSystem();
             if (mRelinquished) {
                 if (LOGD) Slog.d(TAG, "Ignoring abandon after commit relinquished control");
                 return;
@@ -3725,6 +3746,10 @@ public class PackageInstallerSession extends IPackageInstallerSession.Stub {
 
     @Override
     public void abandon() {
+        if (mIsPerfLockAcquired && mPerfBoostInstall != null) {
+            mPerfBoostInstall.perfLockRelease();
+            mIsPerfLockAcquired = false;
+        }
         if (params.isStaged) {
             mStagedSession.abandon();
         } else {
