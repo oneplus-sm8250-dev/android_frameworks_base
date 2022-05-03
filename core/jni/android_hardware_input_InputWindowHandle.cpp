@@ -32,6 +32,7 @@
 #include "android_hardware_input_InputApplicationHandle.h"
 #include "android_util_Binder.h"
 #include "core_jni_helpers.h"
+#include "gui/WindowInfo.h"
 #include "jni.h"
 
 namespace android {

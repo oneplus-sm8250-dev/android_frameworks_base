@@ -99,6 +99,7 @@ import com.android.keyguard.KeyguardUpdateMonitor;
 import com.android.keyguard.KeyguardUpdateMonitorCallback;
 import com.android.keyguard.KeyguardViewController;
 import com.android.keyguard.ViewMediatorCallback;
+import com.android.systemui.Dependency;
 import com.android.systemui.Dumpable;
 import com.android.systemui.SystemUI;
 import com.android.systemui.animation.Interpolators;
@@ -330,6 +331,8 @@ public class KeyguardViewMediator extends SystemUI implements Dumpable,
      * Index is the slotId - in case of multiple SIM cards.
      */
     private final SparseIntArray mLastSimStates = new SparseIntArray();
+    private static SparseIntArray mUnlockTrackSimStates = new SparseIntArray();
+    private static final int STATE_INVALID = -1;
 
     /**
      * Indicates if a SIM card had the SIM PIN enabled during the initialization, before
@@ -405,12 +408,6 @@ public class KeyguardViewMediator extends SystemUI implements Dumpable,
     private boolean mPendingLock;
 
     /**
-     * When starting to go away, flag a need to show the PIN lock so the keyguard can be brought
-     * back.
-     */
-    private boolean mPendingPinLock = false;
-
-    /**
      * Whether a power button gesture (such as double tap for camera) has been detected. This is
      * delivered directly from {@link KeyguardService}, immediately upon the gesture being detected.
      * This is used in {@link #onStartedWakingUp} to decide whether to execute the pending lock, or
@@ -482,19 +479,6 @@ public class KeyguardViewMediator extends SystemUI implements Dumpable,
     };
 
     KeyguardUpdateMonitorCallback mUpdateCallback = new KeyguardUpdateMonitorCallback() {
-
-        @Override
-        public void onKeyguardVisibilityChanged(boolean showing) {
-            synchronized (KeyguardViewMediator.this) {
-                if (!showing && mPendingPinLock) {
-                    Log.i(TAG, "PIN lock requested, starting keyguard");
-
-                    // Bring the keyguard back in order to show the PIN lock
-                    mPendingPinLock = false;
-                    doKeyguardLocked(null);
-                }
-            }
-        }
 
         @Override
         public void onUserSwitching(int userId) {
@@ -576,6 +560,29 @@ public class KeyguardViewMediator extends SystemUI implements Dumpable,
                 lastSimStateWasLocked = (lastState == TelephonyManager.SIM_STATE_PIN_REQUIRED
                         || lastState == TelephonyManager.SIM_STATE_PUK_REQUIRED);
                 mLastSimStates.append(slotId, simState);
+
+                int trackState = mUnlockTrackSimStates.get(slotId, STATE_INVALID);
+                //update the mUnlockTrackSimStates
+                if(simState == TelephonyManager.SIM_STATE_READY){
+                    if(trackState == TelephonyManager.SIM_STATE_LOADED){
+                        if (DEBUG) Log.e(TAG, "skip the redundant SIM_STATE_READY state");
+                        return;
+                    }else{
+                        mUnlockTrackSimStates.put(slotId, simState);
+                   }
+                }else{
+                    if(simState != TelephonyManager.SIM_STATE_PIN_REQUIRED) {
+                        mUnlockTrackSimStates.put(slotId, simState);
+                    }
+                }
+
+                //check the SIM_STATE_PIN_REQUIRED
+                if(trackState == TelephonyManager.SIM_STATE_READY){
+                    if(simState == TelephonyManager.SIM_STATE_PIN_REQUIRED) {
+                        if (DEBUG) Log.e(TAG, "skip the unnecessary SIM_STATE_PIN_REQUIRED state");
+                        return;
+                    }
+                }
             }
 
             switch (simState) {
@@ -616,7 +623,6 @@ public class KeyguardViewMediator extends SystemUI implements Dumpable,
                                     + "showing; need to show keyguard so user can enter sim pin");
                             doKeyguardLocked(null);
                         } else {
-                            mPendingPinLock = true;
                             resetStateLocked();
                         }
                     }
@@ -758,9 +764,6 @@ public class KeyguardViewMediator extends SystemUI implements Dumpable,
         @Override
         public void onBouncerVisiblityChanged(boolean shown) {
             synchronized (KeyguardViewMediator.this) {
-                if (shown) {
-                    mPendingPinLock = false;
-                }
                 adjustStatusBarLocked(shown, false);
             }
         }
@@ -1445,6 +1448,9 @@ public class KeyguardViewMediator extends SystemUI implements Dumpable,
         Trace.endSection();
     }
 
+    public static int getUnlockTrackSimState(int slotId) {
+        return mUnlockTrackSimStates.get(slotId);
+    }
     public boolean isHiding() {
         return mHiding;
     }
@@ -1469,7 +1475,8 @@ public class KeyguardViewMediator extends SystemUI implements Dumpable,
             if (mOccluded != isOccluded) {
                 mOccluded = isOccluded;
                 mUpdateMonitor.setKeyguardOccluded(isOccluded);
-                mKeyguardViewControllerLazy.get().setOccluded(isOccluded, animate
+                mKeyguardViewControllerLazy.get().setOccluded(isOccluded,
+                        (Dependency.get(KeyguardUpdateMonitor.class).isSimPinSecure()?false:animate)
                         && mDeviceInteractive);
                 adjustStatusBarLocked();
             }

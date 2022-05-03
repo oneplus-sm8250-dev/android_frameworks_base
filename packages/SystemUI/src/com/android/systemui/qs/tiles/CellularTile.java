@@ -306,6 +306,7 @@ public class CellularTile extends SecureQSTile<SignalState> {
         @Override
         public void setMobileDataEnabled(boolean enabled) {
             mDetailAdapter.setMobileDataEnabled(enabled);
+            refreshState(mInfo);
         }
     }
 

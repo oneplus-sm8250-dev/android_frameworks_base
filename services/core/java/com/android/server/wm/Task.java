@@ -173,6 +173,7 @@ import android.os.UserHandle;
 import android.provider.Settings;
 import android.service.voice.IVoiceInteractionSession;
 import android.util.ArraySet;
+import android.util.BoostFramework;
 import android.util.DisplayMetrics;
 import android.util.Slog;
 import android.util.TypedXmlPullParser;
@@ -523,6 +524,9 @@ class Task extends TaskFragment {
     private static final int TRANSLUCENT_TIMEOUT_MSG = FIRST_ACTIVITY_TASK_MSG + 1;
 
     private final Handler mHandler;
+
+    private static final ActivityPluginDelegate mActivityPluginDelegate =
+        new ActivityPluginDelegate();
 
     private class ActivityTaskHandler extends Handler {
 
@@ -5123,6 +5127,11 @@ class Task extends TaskFragment {
         ProtoLog.i(WM_DEBUG_ADD_REMOVE, "Adding activity %s to task %s "
                         + "callers: %s", r, task, new RuntimeException("here").fillInStackTrace());
 
+        if (mActivityPluginDelegate != null) {
+            mActivityPluginDelegate.activityInvokeNotification
+                (r.info.packageName, getWindowingMode() == WINDOWING_MODE_FULLSCREEN);
+        }
+
         // The transition animation and starting window are not needed if {@code allowMoveToFront}
         // is false, because the activity won't be visible.
         if ((!isHomeOrRecentsRootTask() || hasActivity()) && allowMoveToFront) {
@@ -6146,6 +6155,13 @@ class Task extends TaskFragment {
 
     AnimatingActivityRegistry getAnimatingActivityRegistry() {
         return mAnimatingActivityRegistry;
+    }
+
+    public void onARStopTriggered(ActivityRecord r) {
+        if (mActivityPluginDelegate != null && getWindowingMode() != WINDOWING_MODE_UNDEFINED) {
+                            mActivityPluginDelegate.activitySuspendNotification
+                                (r.info.applicationInfo.packageName, getWindowingMode() == WINDOWING_MODE_FULLSCREEN, false);
+                        }
     }
 
     @Override

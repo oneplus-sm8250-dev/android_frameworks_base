@@ -22,6 +22,7 @@ import android.graphics.Canvas;
 import android.graphics.ColorFilter;
 import android.graphics.Paint;
 import android.graphics.drawable.Drawable;
+import android.util.Log;
 import android.view.animation.Interpolator;
 import android.view.animation.OvershootInterpolator;
 
@@ -215,6 +216,8 @@ public class UdfpsEnrollProgressBarDrawable extends Drawable {
 
     @Override
     public void draw(@NonNull Canvas canvas) {
+        Log.d(TAG, "setEnrollmentProgress: draw");
+
         canvas.save();
 
         // Progress starts from the top, instead of the right

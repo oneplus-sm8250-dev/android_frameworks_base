@@ -3629,6 +3629,7 @@ public class StatusBar extends SystemUI implements
 
         @Override
         public void onScreenTurnedOff() {
+            mDozeServiceHost.updateDozing();
             mFalsingCollector.onScreenOff();
             mScrimController.onScreenTurnedOff();
             updateIsKeyguard();

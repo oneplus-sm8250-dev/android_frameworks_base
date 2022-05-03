@@ -2182,29 +2182,6 @@ public class SizeCompatTests extends WindowTestsBase {
                 .computeAspectRatio(sizeCompatAppBounds), delta);
     }
 
-    @Test
-    public void testClearSizeCompat_resetOverrideConfig() {
-        final int origDensity = 480;
-        final int newDensity = 520;
-        final DisplayContent display = new TestDisplayContent.Builder(mAtm, 600, 800)
-                .setDensityDpi(origDensity)
-                .build();
-        setUpApp(display);
-        prepareUnresizable(mActivity, -1.f /* maxAspect */, SCREEN_ORIENTATION_PORTRAIT);
-
-        // Activity should enter size compat with old density after display density change.
-        display.setForcedDensity(newDensity, UserHandle.USER_CURRENT);
-
-        assertScaled();
-        assertEquals(origDensity, mActivity.getConfiguration().densityDpi);
-
-        // Activity should exit size compat with new density.
-        mActivity.clearSizeCompatMode();
-
-        assertFitted();
-        assertEquals(newDensity, mActivity.getConfiguration().densityDpi);
-    }
-
     private void assertHorizontalPositionForDifferentDisplayConfigsForLandscapeActivity(
             float letterboxHorizontalPositionMultiplier) {
         // Set up a display in landscape and ignoring orientation request.
