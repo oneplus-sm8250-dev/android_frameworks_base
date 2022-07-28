@@ -132,6 +132,8 @@ public class UsbDeviceManager implements ActivityTaskManagerInternal.ScreenObser
 
     private static final String USB_STATE_MATCH =
             "DEVPATH=/devices/virtual/android_usb/android0";
+    private static final String USB_STATE_MATCH_SEC =
+            "DEVPATH=/devices/virtual/android_usb/android1";
     private static final String ACCESSORY_START_MATCH =
             "DEVPATH=/devices/virtual/misc/usb_accessory";
     private static final String FUNCTIONS_PATH =
@@ -379,6 +381,7 @@ public class UsbDeviceManager implements ActivityTaskManagerInternal.ScreenObser
         // Watch for USB configuration changes
         mUEventObserver = new UsbUEventObserver();
         mUEventObserver.startObserving(USB_STATE_MATCH);
+        mUEventObserver.startObserving(USB_STATE_MATCH_SEC);
         mUEventObserver.startObserving(ACCESSORY_START_MATCH);
     }
 
@@ -630,7 +633,7 @@ public class UsbDeviceManager implements ActivityTaskManagerInternal.ScreenObser
                 Slog.e(TAG, "unknown state " + state);
                 return;
             }
-            removeMessages(MSG_UPDATE_STATE);
+            if (configured == 0) removeMessages(MSG_UPDATE_STATE);
             if (connected == 1) removeMessages(MSG_FUNCTION_SWITCH_TIMEOUT);
             Message msg = Message.obtain(this, MSG_UPDATE_STATE);
             msg.arg1 = connected;
@@ -1695,6 +1698,10 @@ public class UsbDeviceManager implements ActivityTaskManagerInternal.ScreenObser
             mCurrentFunctions = usbFunctions;
             if (functions == null || applyAdbFunction(functions)
                     .equals(UsbManager.USB_FUNCTION_NONE)) {
+                functions = getSystemProperty(getPersistProp(true),
+                            UsbManager.USB_FUNCTION_NONE);
+
+                if (functions.equals(UsbManager.USB_FUNCTION_NONE))
                 functions = UsbManager.usbFunctionsToString(getChargingFunctions());
             }
             functions = applyAdbFunction(functions);

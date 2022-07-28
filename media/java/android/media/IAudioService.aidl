@@ -216,6 +216,9 @@ interface IAudioService {
 
     void handleBluetoothA2dpDeviceConfigChange(in BluetoothDevice device);
 
+    void handleBluetoothA2dpActiveDeviceChange(in BluetoothDevice device,
+            int state, int profile, boolean suppressNoisyIntent, int a2dpVolume);
+
     @UnsupportedAppUsage
     AudioRoutesInfo startWatchingRoutes(in IAudioRoutesObserver observer);
 
@@ -331,6 +334,8 @@ interface IAudioService {
     // code via IAudioManager.h need to be added to the top section.
 
     oneway void setMultiAudioFocusEnabled(in boolean enabled);
+
+    void cacheParameters(in String keyValuePairs);
 
     int setPreferredDevicesForCapturePreset(
             in int capturePreset, in List<AudioDeviceAttributes> devices);

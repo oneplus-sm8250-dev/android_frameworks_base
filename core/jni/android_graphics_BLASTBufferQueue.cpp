@@ -96,6 +96,18 @@ static jobject nativeGetSurface(JNIEnv* env, jclass clazz, jlong ptr,
                                                   queue->getSurface(includeSurfaceControlHandle));
 }
 
+static void nativeSetUndequeuedBufferCount(JNIEnv* env, jclass clazz, jlong ptr, jint count) {
+    sp<BLASTBufferQueue> queue = reinterpret_cast<BLASTBufferQueue*>(ptr);
+    if (queue == nullptr) return;
+    queue->setUndequeuedBufferCount(count);
+}
+
+static jint nativeGetUndequeuedBufferCount(JNIEnv* env, jclass clazz, jlong ptr) {
+    sp<BLASTBufferQueue> queue = reinterpret_cast<BLASTBufferQueue*>(ptr);
+    if (queue == nullptr) return -1;
+    return queue->getUndequeuedBufferCount();
+}
+
 static void nativeSetNextTransaction(JNIEnv* env, jclass clazz, jlong ptr, jlong transactionPtr) {
     sp<BLASTBufferQueue> queue = reinterpret_cast<BLASTBufferQueue*>(ptr);
     auto transaction = reinterpret_cast<SurfaceComposerClient::Transaction*>(transactionPtr);
@@ -143,6 +155,8 @@ static const JNINativeMethod gMethods[] = {
         {"nativeCreate", "(Ljava/lang/String;)J", (void*)nativeCreate},
         {"nativeCreateAndUpdate", "(Ljava/lang/String;JJJI)J", (void*)nativeCreateAndUpdate},
         {"nativeGetSurface", "(JZ)Landroid/view/Surface;", (void*)nativeGetSurface},
+        {"nativeSetUndequeuedBufferCount", "(JI)V", (void*)nativeSetUndequeuedBufferCount},
+        {"nativeGetUndequeuedBufferCount", "(J)I", (void*)nativeGetUndequeuedBufferCount},
         {"nativeDestroy", "(J)V", (void*)nativeDestroy},
         {"nativeSetNextTransaction", "(JJ)V", (void*)nativeSetNextTransaction},
         {"nativeUpdate", "(JJJJIJ)V", (void*)nativeUpdate},

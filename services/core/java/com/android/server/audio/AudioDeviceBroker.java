@@ -547,7 +547,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
                 return true;
             }
             if (o instanceof BtDeviceConnectionInfo) {
-                return mDevice.equals(((BtDeviceConnectionInfo) o).mDevice);
+                return mDevice.equals(((BtDeviceConnectionInfo) o).mDevice) &&
+                       mProfile == (((BtDeviceConnectionInfo) o).mProfile);
             }
             return false;
         }
@@ -580,7 +581,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
             // when receiving a request to change the connection state of a device, this last
             // request is the source of truth, so cancel all previous requests that are already in
             // the handler
-            removeScheduledA2dpEvents(info.mDevice);
+            removeScheduledA2dpEvents(info.mDevice, info.mProfile);
 
             sendLMsgNoDelay(
                     info.mState == BluetoothProfile.STATE_CONNECTED
@@ -592,14 +593,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
     /** remove all previously scheduled connection and state change events for the given device */
     @GuardedBy("mDeviceStateLock")
-    private void removeScheduledA2dpEvents(@NonNull BluetoothDevice device) {
-        mBrokerHandler.removeEqualMessages(MSG_L_A2DP_DEVICE_CONFIG_CHANGE, device);
+    private void removeScheduledA2dpEvents(@NonNull BluetoothDevice device, int profile) {
+        if (profile == BluetoothProfile.A2DP) {
+            mBrokerHandler.removeEqualMessages(MSG_L_A2DP_DEVICE_CONFIG_CHANGE, device);
+        }
 
         final BtDeviceConnectionInfo connectionInfoToRemove = new BtDeviceConnectionInfo(device,
                 // the next parameters of the constructor will be ignored when finding the message
                 // to remove as the equality of the message's object is tested on the device itself
                 // (see BtDeviceConnectionInfo.equals() method override)
-                BluetoothProfile.STATE_CONNECTED, 0, false, -1);
+                BluetoothProfile.STATE_CONNECTED, profile, false, -1);
         mBrokerHandler.removeEqualMessages(MSG_L_A2DP_DEVICE_CONNECTION_CHANGE_EXT_DISCONNECTION,
                 connectionInfoToRemove);
         mBrokerHandler.removeEqualMessages(MSG_L_A2DP_DEVICE_CONNECTION_CHANGE_EXT_CONNECTION,
@@ -613,6 +616,18 @@ import java.util.concurrent.atomic.AtomicBoolean;
                 devInfoToRemove);
         mBrokerHandler.removeEqualMessages(MSG_L_A2DP_ACTIVE_DEVICE_CHANGE,
                 devInfoToRemove);
+    }
+
+    /*package*/ void postBluetoothA2dpDeviceConfigChangeExt(
+            @NonNull BluetoothDevice device,
+            @AudioService.BtProfileConnectionState int state, int profile,
+            boolean suppressNoisyIntent, int a2dpVolume) {
+         final BtDeviceConnectionInfo info = new BtDeviceConnectionInfo(device, state, profile,
+                 suppressNoisyIntent, a2dpVolume);
+         synchronized (mDeviceStateLock) {
+             removeScheduledA2dpEvents(info.mDevice, info.mProfile);
+             sendLMsgNoDelay(MSG_L_A2DP_ACTIVE_DEVICE_CHANGE_EXT, SENDMSG_QUEUE, info);
+         }
     }
 
     private static final class HearingAidDeviceConnectionInfo {
@@ -1470,6 +1485,22 @@ import java.util.concurrent.atomic.AtomicBoolean;
                                 info.mDevice, info.mState, info.mSupprNoisy, info.mMusicDevice);
                     }
                 } break;
+                case MSG_L_A2DP_ACTIVE_DEVICE_CHANGE_EXT: {
+                    final BtDeviceConnectionInfo info = (BtDeviceConnectionInfo) msg.obj;
+                    AudioService.sDeviceLogger.log((new AudioEventLogger.StringEvent(
+                    "handleBluetoothA2dpActiveDeviceChangeExt "
+                           + " state=" + info.mState
+                           // only querying address as this is the only readily available
+                           // field on the device
+                           + " addr=" + info.mDevice.getAddress()
+                           + " prof=" + info.mProfile + " supprNoisy=" + info.mSupprNoisy
+                           + " vol=" + info.mVolume)).printLog(TAG));
+                    synchronized (mDeviceStateLock) {
+                        mDeviceInventory.handleBluetoothA2dpActiveDeviceChangeExt(
+                                info.mDevice, info.mState, info.mProfile,
+                                info.mSupprNoisy, info.mVolume);
+                    }
+                } break;
                 case MSG_IL_SAVE_PREF_DEVICES_FOR_STRATEGY: {
                     final int strategy = msg.arg1;
                     final List<AudioDeviceAttributes> devices =
@@ -1594,6 +1625,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
     private static final int MSG_L_UPDATE_COMMUNICATION_ROUTE_CLIENT = 43;
     private static final int MSG_I_SCO_AUDIO_STATE_CHANGED = 44;
 
+    // process external command to (dis)connect or change active A2DP device
+    private static final int MSG_L_A2DP_ACTIVE_DEVICE_CHANGE_EXT = 64;
+
     private static boolean isMessageHandledUnderWakelock(int msgId) {
         switch(msgId) {
             case MSG_L_SET_WIRED_DEVICE_CONNECTION_STATE:
@@ -1609,6 +1643,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
             case MSG_L_A2DP_DEVICE_CONNECTION_CHANGE_EXT_DISCONNECTION:
             case MSG_L_HEARING_AID_DEVICE_CONNECTION_CHANGE_EXT:
             case MSG_CHECK_MUTE_MUSIC:
+            case MSG_L_A2DP_ACTIVE_DEVICE_CHANGE_EXT:
                 return true;
             default:
                 return false;
@@ -1837,7 +1872,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
             // what has been communicated to audio policy manager. The device
             // returned by requestedCommunicationDevice() can be a dummy SCO device if legacy
             // APIs are used to start SCO audio.
-            AudioDeviceAttributes device = mBtHelper.getHeadsetAudioDevice();
+            AudioDeviceAttributes device = mBtHelper.getHeadsetAudioDummyDevice();
             if (device != null) {
                 return device;
             }

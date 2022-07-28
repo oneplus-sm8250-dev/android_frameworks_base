@@ -379,7 +379,8 @@ public class InternetDialog extends SystemUIDialog implements
         }
 
         if (!mInternetDialogController.hasActiveSubId()
-                && (!mWifiManager.isWifiEnabled() || !isCarrierNetworkActive)) {
+                && (!mWifiManager.isWifiEnabled() || !isCarrierNetworkActive)
+                || mInternetDialogController.isInCallOnNonDds()) {
             mMobileNetworkLayout.setVisibility(View.GONE);
         } else {
             mMobileNetworkLayout.setVisibility(View.VISIBLE);
@@ -684,6 +685,11 @@ public class InternetDialog extends SystemUIDialog implements
             mAdapter.setWifiEntries(wifiEntries, mWifiEntriesCount);
             mAdapter.notifyDataSetChanged();
         });
+    }
+
+    @Override
+    public void onNonDdsCallStateChanged() {
+        mHandler.post(() -> updateDialog(true /* shouldUpdateMobileNetwork */));
     }
 
     @Override

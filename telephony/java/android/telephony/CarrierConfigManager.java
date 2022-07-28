@@ -229,6 +229,19 @@ public class CarrierConfigManager {
             "call_forwarding_when_busy_supported_bool";
 
     /**
+     * Boolean indicating if carrier supports call forwarding option "When not logged in".
+     *
+     * {@code true}: Call forwarding option "When not logged in" is supported.
+     * {@code false}: Call forwarding option "When not logged in" is not supported. Option will be
+     * removed in the UI.
+     *
+     * By default this value is true.
+     * @hide
+     */
+    public static final String KEY_CALL_FORWARDING_WHEN_NOT_LOGGED_IN_SUPPORTED_BOOL =
+            "call_forwarding_when_not_logged_in_supported_bool";
+
+    /**
      * Boolean indicating if the "Caller ID" item is visible in the Additional Settings menu.
      * true means visible. false means gone.
      * @hide
@@ -771,6 +784,14 @@ public class CarrierConfigManager {
     public static final String KEY_VILTE_DATA_IS_METERED_BOOL = "vilte_data_is_metered_bool";
 
     /**
+     * Flag indicating whether we should reset UT capability or not for IMS deregistration
+     * and for IMS feature state not ready
+     * @hide
+     */
+    public static final String KEY_IGNORE_RESET_UT_CAPABILITY_BOOL =
+            "ignore_reset_ut_capability_bool";
+
+    /**
      * Flag specifying whether WFC over IMS should be available for carrier: independent of
      * carrier provisioning. If false: hard disabled. If true: then depends on carrier
      * provisioning, availability etc.
@@ -804,6 +825,18 @@ public class CarrierConfigManager {
      */
     public static final String KEY_CARRIER_WFC_SUPPORTS_WIFI_ONLY_BOOL =
             "carrier_wfc_supports_wifi_only_bool";
+
+    /**
+     * Flag specifying whether WFC over IMS supports the "ims preferred" option.  If false, the wifi
+     * calling settings will not include an option for "ims preferred".  If true, the wifi calling
+     * settings will include an option for "ims preferred"
+     * <p>
+     * By default, it is assumed that WFC does not support "ims preferred".
+     * @hide
+     */
+    public static final String KEY_CARRIER_WFC_SUPPORTS_IMS_PREFERRED_BOOL =
+            "carrier_wfc_supports_ims_preferred_bool";
+
 
     /**
      * Default mode for WFC over IMS on home network:
@@ -934,6 +967,13 @@ public class CarrierConfigManager {
     /** Flag specifying whether VoLTE TTY is supported. */
     public static final String KEY_CARRIER_VOLTE_TTY_SUPPORTED_BOOL
             = "carrier_volte_tty_supported_bool";
+
+     /**
+     * Flag indicating whether VT tty is supported
+     * @hide
+     */
+    public static final String KEY_CARRIER_VT_TTY_SUPPORT_BOOL =
+            "carrier_vt_tty_support_bool";
 
     /**
      * Flag specifying whether IMS service can be turned off. If false then the service will not be
@@ -1464,6 +1504,15 @@ public class CarrierConfigManager {
     public static final String KEY_HIDE_ENHANCED_4G_LTE_BOOL = "hide_enhanced_4g_lte_bool";
 
     /**
+     * Determines whether the Enabled 5G toggle will be shown in the settings. When this
+     * option is {@code true}, the toggle will be hidden regardless of whether the device and
+     * carrier supports 5G or not.
+     *
+     * @hide
+     */
+    public static final String KEY_HIDE_ENABLED_5G_BOOL = "hide_enabled_5g_bool";
+
+    /**
      * Sets the default state for the "Enhanced 4G LTE" or "Advanced Calling" mode toggle set by the
      * user. When this is {@code true}, this mode by default is on, otherwise if {@code false},
      * this mode by default is off.
@@ -1926,6 +1975,7 @@ public class CarrierConfigManager {
     public static final String KEY_SHOW_PRECISE_FAILED_CAUSE_BOOL =
             "show_precise_failed_cause_bool";
 
+
     /**
      * A list of carrier nr availability is used to determine whether the carrier enable the
      * non-standalone (NSA) mode of 5G NR, standalone (SA) mode of 5G NR
@@ -1941,6 +1991,12 @@ public class CarrierConfigManager {
      */
     public static final String KEY_CARRIER_NR_AVAILABILITIES_INT_ARRAY =
             "carrier_nr_availabilities_int_array";
+
+    /**
+     * Flag specifying whether CDMA call waiting and call forwarding are enabled
+     * @hide
+     */
+    public static final String KEY_CDMA_CW_CF_ENABLED_BOOL = "cdma_cw_cf_enabled_bool";
 
     /**
      * Boolean to decide whether LTE is enabled.
@@ -1969,8 +2025,8 @@ public class CarrierConfigManager {
     public static final String KEY_CARRIER_SETTINGS_ACTIVITY_COMPONENT_NAME_STRING =
             "carrier_settings_activity_component_name_string";
 
-    // These variables are used by the MMS service and exposed through another API,
-    // SmsManager. The variable names and string values are copied from there.
+    // These variables are used by the MMS service and exposed through another API, {@link
+    // SmsManager}. The variable names and string values are copied from there.
     public static final String KEY_MMS_ALIAS_ENABLED_BOOL = "aliasEnabled";
     public static final String KEY_MMS_ALLOW_ATTACH_AUDIO_BOOL = "allowAttachAudio";
     public static final String KEY_MMS_APPEND_TRANSACTION_ID_BOOL = "enabledTransID";
@@ -2411,6 +2467,13 @@ public class CarrierConfigManager {
      */
     public static final String KEY_ALLOW_HOLD_VIDEO_CALL_BOOL =
             "allow_hold_video_call_bool";
+
+    /**
+     * When true, indicates that concurrent call is allowed when there is an ongoing video call.
+     * @hide
+     */
+    public static final String KEY_ALLOW_CONCURRENT_CALL_DURING_VIDEO_CALL_BOOL =
+            "allow_concurrent_call_during_video_call";
 
     /**
      * When true, indicates that the HD audio icon in the in-call screen should not be shown for
@@ -5393,6 +5456,45 @@ public class CarrierConfigManager {
     public static final String KEY_UNTHROTTLE_DATA_RETRY_WHEN_TAC_CHANGES_BOOL =
             "unthrottle_data_retry_when_tac_changes_bool";
 
+     /**
+     * Flag indicating whether carrier supports multianchor conference.
+     * In multianchor conference, a participant of a conference can add
+     * other participants to the call using merge button thereby resulting
+     * in a conference with multi anchors.
+     * @hide
+     */
+    public static final String KEY_CARRIER_SUPPORTS_MULTIANCHOR_CONFERENCE =
+            "carrier_supports_multianchor_conference";
+
+    /**
+     * String array of APN configurations of same MVNO type GID.
+     * The entries should be of form "GID data:all supported apn types:devicecapability:apnname".
+     * example: 52FF:default,mms:SA:nrphone
+     *
+     * @hide
+     */
+    public static final String KEY_MULTI_APN_ARRAY_FOR_SAME_GID = "multi_apn_array_for_same_gid";
+
+    /**
+     * Flag indicating if APN filtering required.
+     *
+     * @hide
+     */
+    public static final String KEY_REQUIRE_APN_FILTERING_WITH_RADIO_CAPABILITY =
+            "require_apn_filtering_with_radio_capability_bool";
+
+    /**
+     * Determines whether carrier supports Sms Callback Mode.
+     * When {@code true}, modem can enter/exit SMS callback mode (SCBM) after sending e911 SMS.
+     * When user tries to make a following e911 call and modem is in SCBM, the same sub will be
+     * selected to place the e911 call over IMS.
+     * When {@code false}, follows the current slot selection logic to place the e911 call.
+     *
+     * @hide
+     */
+    public static final String KEY_USE_SMS_CALLBACK_MODE_BOOL =
+            "use_sms_callback_mode_bool";
+
     /** The default value for every variable. */
     private final static PersistableBundle sDefaults;
 
@@ -5426,9 +5528,11 @@ public class CarrierConfigManager {
         sDefaults.putBoolean(KEY_CONFIG_TELEPHONY_USE_OWN_NUMBER_FOR_VOICEMAIL_BOOL, false);
         sDefaults.putBoolean(KEY_IGNORE_DATA_ENABLED_CHANGED_FOR_VIDEO_CALLS, true);
         sDefaults.putBoolean(KEY_VILTE_DATA_IS_METERED_BOOL, true);
+        sDefaults.putBoolean(KEY_IGNORE_RESET_UT_CAPABILITY_BOOL, false);
         sDefaults.putBoolean(KEY_CARRIER_WFC_IMS_AVAILABLE_BOOL, false);
         sDefaults.putBoolean(KEY_CARRIER_CROSS_SIM_IMS_AVAILABLE_BOOL, false);
         sDefaults.putBoolean(KEY_CARRIER_WFC_SUPPORTS_WIFI_ONLY_BOOL, false);
+        sDefaults.putBoolean(KEY_CARRIER_WFC_SUPPORTS_IMS_PREFERRED_BOOL, false);
         sDefaults.putBoolean(KEY_CARRIER_DEFAULT_WFC_IMS_ENABLED_BOOL, false);
         sDefaults.putBoolean(KEY_CARRIER_DEFAULT_WFC_IMS_ROAMING_ENABLED_BOOL, false);
         sDefaults.putBoolean(KEY_CARRIER_PROMOTE_WFC_ON_CALL_FAIL_BOOL, false);
@@ -5441,6 +5545,7 @@ public class CarrierConfigManager {
         sDefaults.putBoolean(KEY_CARRIER_SUPPORTS_SS_OVER_UT_BOOL, false);
         sDefaults.putBoolean(KEY_CARRIER_VOLTE_OVERRIDE_WFC_PROVISIONING_BOOL, false);
         sDefaults.putBoolean(KEY_CARRIER_VOLTE_TTY_SUPPORTED_BOOL, true);
+        sDefaults.putBoolean(KEY_CARRIER_VT_TTY_SUPPORT_BOOL, false);
         sDefaults.putBoolean(KEY_CARRIER_ALLOW_TURNOFF_IMS_BOOL, true);
         sDefaults.putBoolean(KEY_CARRIER_IMS_GBA_REQUIRED_BOOL, false);
         sDefaults.putBoolean(KEY_CARRIER_INSTANT_LETTERING_AVAILABLE_BOOL, false);
@@ -5467,7 +5572,7 @@ public class CarrierConfigManager {
         sDefaults.putBoolean(KEY_HIDE_SIM_LOCK_SETTINGS_BOOL, false);
 
         sDefaults.putBoolean(KEY_CARRIER_VOLTE_PROVISIONED_BOOL, false);
-        sDefaults.putBoolean(KEY_CALL_BARRING_VISIBILITY_BOOL, false);
+        sDefaults.putBoolean(KEY_CALL_BARRING_VISIBILITY_BOOL, true);
         sDefaults.putBoolean(KEY_CALL_BARRING_SUPPORTS_PASSWORD_CHANGE_BOOL, true);
         sDefaults.putBoolean(KEY_CALL_BARRING_SUPPORTS_DEACTIVATE_ALL_BOOL, true);
         sDefaults.putInt(KEY_CALL_BARRING_DEFAULT_SERVICE_CLASS_INT, SERVICE_CLASS_VOICE);
@@ -5476,6 +5581,7 @@ public class CarrierConfigManager {
         sDefaults.putBoolean(KEY_CALL_FORWARDING_WHEN_UNREACHABLE_SUPPORTED_BOOL, true);
         sDefaults.putBoolean(KEY_CALL_FORWARDING_WHEN_UNANSWERED_SUPPORTED_BOOL, true);
         sDefaults.putBoolean(KEY_CALL_FORWARDING_WHEN_BUSY_SUPPORTED_BOOL, true);
+        sDefaults.putBoolean(KEY_CALL_FORWARDING_WHEN_NOT_LOGGED_IN_SUPPORTED_BOOL, false);
         sDefaults.putBoolean(KEY_ADDITIONAL_SETTINGS_CALLER_ID_VISIBILITY_BOOL, true);
         sDefaults.putBoolean(KEY_ADDITIONAL_SETTINGS_CALL_WAITING_VISIBILITY_BOOL, true);
         sDefaults.putBoolean(KEY_DISABLE_SUPPLEMENTARY_SERVICES_IN_AIRPLANE_MODE_BOOL, false);
@@ -5547,6 +5653,7 @@ public class CarrierConfigManager {
                 new String[]{"default", "mms", "dun", "supl"});
         sDefaults.putStringArray(KEY_CARRIER_METERED_ROAMING_APN_TYPES_STRINGS,
                 new String[]{"default", "mms", "dun", "supl"});
+        sDefaults.putBoolean(KEY_CDMA_CW_CF_ENABLED_BOOL, false);
         sDefaults.putStringArray(KEY_CARRIER_WWAN_DISALLOWED_APN_TYPES_STRING_ARRAY,
                 new String[]{""});
         sDefaults.putStringArray(KEY_CARRIER_WLAN_DISALLOWED_APN_TYPES_STRING_ARRAY,
@@ -5592,6 +5699,7 @@ public class CarrierConfigManager {
         sDefaults.putBoolean(KEY_DISPLAY_HD_AUDIO_PROPERTY_BOOL, true);
         sDefaults.putBoolean(KEY_EDITABLE_ENHANCED_4G_LTE_BOOL, true);
         sDefaults.putBoolean(KEY_HIDE_ENHANCED_4G_LTE_BOOL, false);
+        sDefaults.putBoolean(KEY_HIDE_ENABLED_5G_BOOL, true);
         sDefaults.putBoolean(KEY_ENHANCED_4G_LTE_ON_BY_DEFAULT_BOOL, true);
         sDefaults.putBoolean(KEY_HIDE_IMS_APN_BOOL, false);
         sDefaults.putBoolean(KEY_HIDE_PREFERRED_NETWORK_TYPE_BOOL, false);
@@ -5719,6 +5827,7 @@ public class CarrierConfigManager {
         sDefaults.putBoolean(KEY_ALLOW_MERGE_WIFI_CALLS_WHEN_VOWIFI_OFF_BOOL, true);
         sDefaults.putBoolean(KEY_ALLOW_ADD_CALL_DURING_VIDEO_CALL_BOOL, true);
         sDefaults.putBoolean(KEY_ALLOW_HOLD_VIDEO_CALL_BOOL, true);
+        sDefaults.putBoolean(KEY_ALLOW_CONCURRENT_CALL_DURING_VIDEO_CALL_BOOL, true);
         sDefaults.putBoolean(KEY_WIFI_CALLS_CAN_BE_HD_AUDIO, true);
         sDefaults.putBoolean(KEY_VIDEO_CALLS_CAN_BE_HD_AUDIO, true);
         sDefaults.putBoolean(KEY_GSM_CDMA_CALLS_CAN_BE_HD_AUDIO, false);
@@ -5992,6 +6101,27 @@ public class CarrierConfigManager {
         sDefaults.putBoolean(KEY_UNTHROTTLE_DATA_RETRY_WHEN_TAC_CHANGES_BOOL, false);
         sDefaults.putBoolean(KEY_VONR_SETTING_VISIBILITY_BOOL, true);
         sDefaults.putBoolean(KEY_VONR_ENABLED_BOOL, false);
+        sDefaults.putStringArray(KEY_MULTI_APN_ARRAY_FOR_SAME_GID, new String[] {
+                "52FF:mms,supl,hipri,default,fota:SA:nrphone",
+                "52FF:mms,supl,hipri,default,fota:NSA:nxtgenphone",
+                "52FF:mms,supl,hipri,default,fota:LTE:nxtgenphone",
+                "52FF:mms,supl,hipri,default,fota:TD_SCDMA:nxtgenphone",
+                "52FF:mms,supl,hipri,default,fota:UMTS:nxtgenphone",
+                "52FF:mms,supl,hipri,default,fota:GSM:nxtgenphone",
+                "52FF:mms,supl,hipri,default,fota:HDR:nxtgenphone",
+                "52FF:mms,supl,hipri,default,fota:1xRTT:nxtgenphone",
+                "53FF:mms,supl,hipri,default,fota:SA:enhancedphone",
+                "53FF:mms,supl,hipri,default,fota:NSA:enhancedphone",
+                "53FF:mms,supl,hipri,default,fota:LTE:nxtgenphone",
+                "53FF:mms,supl,hipri,default,fota:TD_SCDMA:nxtgenphone",
+                "53FF:mms,supl,hipri,default,fota:UMTS:nxtgenphone",
+                "53FF:mms,supl,hipri,default,fota:GSM:nxtgenphone",
+                "53FF:mms,supl,hipri,default,fota:HDR:nxtgenphone",
+                "53FF:mms,supl,hipri,default,fota:1xRTT:nxtgenphone",
+        });
+        sDefaults.putBoolean(KEY_REQUIRE_APN_FILTERING_WITH_RADIO_CAPABILITY, false);
+        sDefaults.putBoolean(KEY_USE_SMS_CALLBACK_MODE_BOOL, false);
+        sDefaults.putBoolean(KEY_VONR_ENABLED_BOOL, false);
     }
 
     /**
@@ -6242,7 +6372,7 @@ public class CarrierConfigManager {
                 return;
             }
             loader.updateConfigForPhoneId(phoneId, simState);
-        } catch (RemoteException ex) {
+        } catch (RemoteException | IllegalArgumentException ex) {
             Rlog.e(TAG, "Error updating config for phoneId=" + phoneId + ": " + ex.toString());
         }
     }

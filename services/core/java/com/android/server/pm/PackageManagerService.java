@@ -332,6 +332,7 @@ import android.util.Xml;
 import android.util.apk.ApkSignatureVerifier;
 import android.util.jar.StrictJarFile;
 import android.util.proto.ProtoOutputStream;
+import android.util.BoostFramework;
 import android.view.Display;
 
 import com.android.internal.R;
@@ -421,6 +422,7 @@ import libcore.util.HexEncoding;
 
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
+import org.xmlpull.v1.XmlPullParserFactory;
 
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
@@ -428,7 +430,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
@@ -778,6 +782,8 @@ public class PackageManagerService extends IPackageManager.Stub
 
     private static final String COMPANION_PACKAGE_NAME = "com.android.companiondevicemanager";
 
+    private static final String PROPERTY_NO_RIL = "ro.radio.noril";
+
     // Compilation reasons.
     public static final int REASON_FIRST_BOOT = 0;
     public static final int REASON_BOOT_AFTER_OTA = 1;
@@ -882,6 +888,20 @@ public class PackageManagerService extends IPackageManager.Stub
     private final SnapshotCache<WatchedSparseIntArray> mIsolatedOwnersSnapshot =
             new SnapshotCache.Auto(mIsolatedOwners, mIsolatedOwners,
                                    "PackageManagerService.mIsolatedOwners");
+
+    /**
+     * Tracks packages that need to be disabled.
+     * Map of package name to its path on the file system.
+     */
+    final private HashMap<String, String> mPackagesToBeDisabled = new HashMap<>();
+
+    /**
+     * Tracks packages that need to be disabled for QSPA enabled taregts.
+     * List of packages path on the file system.
+     */
+    final private List<String> mPackagesPathToBeDisabledForQSPA = new ArrayList<String>();
+    final private boolean mQspaEnabled = SystemProperties.getBoolean(
+                                                "ro.vendor.config.qspa.apps", false);
 
     /**
      * Tracks new system packages [received in an OTA] that we expect to
@@ -1384,6 +1404,7 @@ public class PackageManagerService extends IPackageManager.Stub
         public @NonNull String requiredPermissionControllerPackage;
         public @NonNull String requiredUninstallerPackage;
         public @Nullable String requiredVerifierPackage;
+        public @Nullable String optionalVerifierPackage;
         public String[] separateProcesses;
         public @NonNull String servicesExtensionPackageName;
         public @Nullable String setupWizardPackage;
@@ -1697,6 +1718,7 @@ public class PackageManagerService extends IPackageManager.Stub
             | FLAG_PERMISSION_REVOKED_COMPAT;
 
     final @Nullable String mRequiredVerifierPackage;
+    final @Nullable String mOptionalVerifierPackage;
     final @NonNull String mRequiredInstallerPackage;
     final @NonNull String mRequiredUninstallerPackage;
     final @NonNull String mRequiredPermissionControllerPackage;
@@ -7340,6 +7362,7 @@ public class PackageManagerService extends IPackageManager.Stub
         mSeparateProcesses = testParams.separateProcesses;
         mViewCompiler = testParams.viewCompiler;
         mRequiredVerifierPackage = testParams.requiredVerifierPackage;
+        mOptionalVerifierPackage = testParams.optionalVerifierPackage;
         mRequiredInstallerPackage = testParams.requiredInstallerPackage;
         mRequiredUninstallerPackage = testParams.requiredUninstallerPackage;
         mRequiredPermissionControllerPackage = testParams.requiredPermissionControllerPackage;
@@ -7407,6 +7430,16 @@ public class PackageManagerService extends IPackageManager.Stub
         mMetrics = injector.getDisplayMetrics();
         mInstaller = injector.getInstaller();
         mEnableFreeCacheV2 = SystemProperties.getBoolean("fw.free_cache_v2", true);
+
+        t.traceBegin("readListOfPackagesToBeDisabled");
+        readListOfPackagesToBeDisabled();
+        t.traceEnd();
+
+        mPackagesPathToBeDisabledForQSPA.add("/system_ext/priv-app/SystemUI");
+        mPackagesPathToBeDisabledForQSPA.add("/system_ext/priv-app/Launcher3QuickStep");
+        mPackagesPathToBeDisabledForQSPA.add("/system/app/PrintSpooler");
+        mPackagesPathToBeDisabledForQSPA.add("/system/priv-app/StatementService");
+        mPackagesPathToBeDisabledForQSPA.add("/product/app/Calendar");
 
         // Create sub-components that provide services / data. Order here is important.
         t.traceBegin("createSubComponents");
@@ -8131,6 +8164,7 @@ public class PackageManagerService extends IPackageManager.Stub
 
             if (!mOnlyCore) {
                 mRequiredVerifierPackage = getRequiredButNotReallyRequiredVerifierLPr();
+                mOptionalVerifierPackage = getOptionalVerifierLPr();
                 mRequiredInstallerPackage = getRequiredInstallerLPr();
                 mRequiredUninstallerPackage = getRequiredUninstallerLPr();
                 ComponentName intentFilterVerifierComponent =
@@ -8151,6 +8185,7 @@ public class PackageManagerService extends IPackageManager.Stub
                         SharedLibraryInfo.VERSION_UNDEFINED);
             } else {
                 mRequiredVerifierPackage = null;
+                mOptionalVerifierPackage = null;
                 mRequiredInstallerPackage = null;
                 mRequiredUninstallerPackage = null;
                 mServicesExtensionPackageName = null;
@@ -8323,6 +8358,75 @@ public class PackageManagerService extends IPackageManager.Stub
             ps.setEnabled(PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
                     UserHandle.USER_SYSTEM, "android");
             logCriticalInfo(Log.ERROR, "Stub disabled; pkg: " + pkgName);
+        }
+    }
+
+    /**
+     * Read the list of packages that need to be disabled.
+     *
+     * For wifi-only devices (modem-less), telephony related applications do not need to run.
+     * This method will read the list of packages from a predefined file in the file system,
+     * and store it in {@link #mPackagesToBeDisabled}. These applications will be skipped when
+     * directories are scanned later.
+     */
+    private void readListOfPackagesToBeDisabled() {
+        boolean wifiOnly = SystemProperties.getBoolean(PROPERTY_NO_RIL, false);
+        if (!wifiOnly) {
+            // Apps need to be disabled only for modem-less devices
+            return;
+        }
+
+        final String TELEPHONY_PACKAGES_PATH = "etc/telephony_packages.xml";
+        File telephonyPackagesFile =
+                new File(Environment.getVendorDirectory(), TELEPHONY_PACKAGES_PATH);
+        FileReader packagesReader = null;
+        Slog.d(TAG, "Disabling packages for wifi-only device, source: " + telephonyPackagesFile);
+
+        try {
+            XmlPullParserFactory factory = XmlPullParserFactory.newInstance();
+            factory.setNamespaceAware(true);
+            XmlPullParser packagesParser = factory.newPullParser();
+            packagesReader = new FileReader(telephonyPackagesFile);
+
+            if (packagesParser != null) {
+                packagesParser.setInput(packagesReader);
+                int eventType = packagesParser.getEventType();
+                while (eventType != XmlPullParser.END_DOCUMENT) {
+                    String tagName = packagesParser.getName();
+                    switch (eventType) {
+                        case XmlPullParser.START_TAG:
+                            if (TextUtils.equals(tagName, "packageinfo")) {
+                                String name = packagesParser.getAttributeValue(null, "name");
+                                String path = packagesParser.getAttributeValue(null, "path");
+                                mPackagesToBeDisabled.put(name, path);
+                            }
+                            break;
+                    }
+                    eventType = packagesParser.next();
+                }
+            }
+        } catch (XmlPullParserException e) {
+            Log.e(TAG, "XmlPullParserException parsing '"+ telephonyPackagesFile + "'", e);
+        } catch (IOException e) {
+            Log.e(TAG, "IOException parsing '" + telephonyPackagesFile + "'", e);
+        } catch (Exception e) {
+            Log.e(TAG, "Exception parsing '" + telephonyPackagesFile + "'", e);
+        }
+
+        if (packagesReader != null) {
+            try {
+                packagesReader.close();
+            } catch (IOException e) {
+                // do nothing
+            }
+        }
+
+        if (DEBUG_PACKAGE_SCANNING) {
+            for (String packageName : mPackagesToBeDisabled.keySet()) {
+                Slog.d(TAG, "readListOfPackagesToBeDisabled"
+                        + ", package: " + packageName
+                        + ", path: " + mPackagesToBeDisabled.get(packageName));
+            }
         }
     }
 
@@ -8610,11 +8714,38 @@ public class PackageManagerService extends IPackageManager.Stub
                 UserHandle.USER_SYSTEM, false /*allowDynamicSplits*/);
         if (matches.size() == 1) {
             return matches.get(0).getComponentInfo().packageName;
+        } else if (matches.size() > 1) {
+                String optionalVerifierName = mContext.getResources().getString(R.string.config_optionalPackageVerifierName);
+                if (TextUtils.isEmpty(optionalVerifierName))
+                    return matches.get(0).getComponentInfo().packageName;
+            for (int i = 0; i < matches.size(); i++) {
+                if (!matches.get(i).getComponentInfo().packageName.contains(optionalVerifierName))
+                    return matches.get(i).getComponentInfo().packageName;
+            }
         } else if (matches.size() == 0) {
             Log.w(TAG, "There should probably be a verifier, but, none were found");
             return null;
         }
         throw new RuntimeException("There must be exactly one verifier; found " + matches);
+    }
+
+    private @Nullable String getOptionalVerifierLPr() {
+        final Intent intent = new Intent("com.qualcomm.qti.intent.action.PACKAGE_NEEDS_OPTIONAL_VERIFICATION");
+
+        final List<ResolveInfo> matches = queryIntentReceiversInternal(intent, PACKAGE_MIME_TYPE,
+                MATCH_SYSTEM_ONLY | MATCH_DIRECT_BOOT_AWARE | MATCH_DIRECT_BOOT_UNAWARE,
+                UserHandle.USER_SYSTEM, false /*allowDynamicSplits*/);
+        if (matches.size() >= 1) {
+            String optionalVerifierName = mContext.getResources().getString(R.string.config_optionalPackageVerifierName);
+            if (TextUtils.isEmpty(optionalVerifierName))
+                return null;
+            for (int i = 0; i < matches.size(); i++) {
+                if (matches.get(i).getComponentInfo().packageName.contains(optionalVerifierName)) {
+                    return matches.get(i).getComponentInfo().packageName;
+                }
+            }
+        }
+        return null;
     }
 
     private @NonNull String getRequiredSharedLibraryLPr(String name, int version) {
@@ -12004,6 +12135,23 @@ public class PackageManagerService extends IPackageManager.Stub
                 // Ignore entries which are not packages
                 continue;
             }
+
+            if (mQspaEnabled) {
+                if (mPackagesPathToBeDisabledForQSPA != null &&
+                        mPackagesPathToBeDisabledForQSPA.contains(file.toString())) {
+                    // Ignore entries contained in {@link #mPackagesPathToBeDisabledForQSPA}
+                    Slog.d(TAG, "QSPA enabled ignoring package for install : " + file);
+                    continue;
+                }
+            }
+
+            if (mPackagesToBeDisabled.values() != null &&
+                    mPackagesToBeDisabled.values().contains(file.toString())) {
+                // Ignore entries contained in {@link #mPackagesToBeDisabled}
+                Slog.d(TAG, "ignoring package: " + file);
+                continue;
+            }
+
             parallelPackageParser.submit(file, parseFlags);
             fileCount++;
         }
@@ -18496,6 +18644,9 @@ public class PackageManagerService extends IPackageManager.Stub
                     : getPackageUid(mRequiredVerifierPackage, MATCH_DEBUG_TRIAGED_MISSING,
                             verifierUser.getIdentifier());
             verificationState.setRequiredVerifierUid(requiredUid);
+            final int optionalUid = mOptionalVerifierPackage == null ? -1
+                    : getPackageUid(mOptionalVerifierPackage, MATCH_DEBUG_TRIAGED_MISSING,
+                            verifierUser.getIdentifier());
             final int installerUid =
                     verificationInfo == null ? -1 : verificationInfo.installerUid;
             final boolean isVerificationEnabled = isVerificationEnabled(
@@ -18581,14 +18732,42 @@ public class PackageManagerService extends IPackageManager.Stub
                     }
                 }
 
+                if (mOptionalVerifierPackage != null) {
+                    final Intent optionalIntent = new Intent(verification);
+                    optionalIntent.setAction("com.qualcomm.qti.intent.action.PACKAGE_NEEDS_OPTIONAL_VERIFICATION");
+                    final List<ResolveInfo> optional_receivers = queryIntentReceiversInternal(optionalIntent,
+                        PACKAGE_MIME_TYPE, 0, verifierUser.getIdentifier(), false /*allowDynamicSplits*/);
+                    final ComponentName optionalVerifierComponent = matchComponentForVerifier(
+                        mOptionalVerifierPackage, optional_receivers);
+                    optionalIntent.setComponent(optionalVerifierComponent);
+                    verificationState.addOptionalVerifier(optionalUid);
+                    if (mRequiredVerifierPackage != null) {
+                        mContext.sendBroadcastAsUser(optionalIntent, verifierUser, android.Manifest.permission.PACKAGE_VERIFICATION_AGENT);
+                    } else {
+                        mContext.sendOrderedBroadcastAsUser(optionalIntent, verifierUser, android.Manifest.permission.PACKAGE_VERIFICATION_AGENT,
+                        new BroadcastReceiver() {
+                            @Override
+                            public void onReceive(Context context, Intent intent) {
+                                final Message msg = mHandler.obtainMessage(CHECK_PENDING_VERIFICATION);
+                                msg.arg1 = verificationId;
+                                mHandler.sendMessageDelayed(msg, getVerificationTimeout());
+                            }
+                        }, null, 0, null, null);
+                        /*
+                         * We don't want the copy to proceed until
+                         * verification succeeds.
+                         */
+                        mWaitForVerificationToComplete = false;
+                    }
+                }
                 if (mRequiredVerifierPackage != null) {
-                    final ComponentName requiredVerifierComponent = matchComponentForVerifier(
-                            mRequiredVerifierPackage, receivers);
                     /*
                      * Send the intent to the required verification agent,
                      * but only start the verification timeout after the
                      * target BroadcastReceivers have run.
                      */
+                    final ComponentName requiredVerifierComponent = matchComponentForVerifier(
+                            mRequiredVerifierPackage, receivers);
                     verification.setComponent(requiredVerifierComponent);
                     idleController.addPowerSaveTempWhitelistApp(Process.myUid(),
                             mRequiredVerifierPackage, idleDuration,
@@ -19250,6 +19429,8 @@ public class PackageManagerService extends IPackageManager.Stub
         final String installerPackageName = installSource.installerPackageName;
 
         if (DEBUG_INSTALL) Slog.d(TAG, "New package installed in " + pkg.getPath());
+        if (pkgName != null)
+            acquireUxPerfLock(BoostFramework.UXE_EVENT_PKG_INSTALL, pkgName, 0);
         synchronized (mLock) {
             // For system-bundled packages, we assume that installing an upgraded version
             // of the package implies that the user actually wants to run that new code,
@@ -20716,6 +20897,11 @@ public class PackageManagerService extends IPackageManager.Stub
                     // on the device; we should replace it.
                     replace = true;
                     if (DEBUG_INSTALL) Slog.d(TAG, "Replace existing pacakge: " + pkgName);
+                    acquireUxPerfLock(BoostFramework.UXE_EVENT_PKG_INSTALL, pkgName, 1);
+                    BoostFramework mPerf = new BoostFramework();
+                    if (mPerf != null) {
+                        mPerf.perfHint(BoostFramework.VENDOR_HINT_APP_UPDATE, pkgName, -1, 0);
+                    }
                 }
 
                 if (replace) {
@@ -21856,7 +22042,17 @@ public class PackageManagerService extends IPackageManager.Stub
             }
         }
 
+        if (res && packageName != null) {
+            acquireUxPerfLock(BoostFramework.UXE_EVENT_PKG_UNINSTALL, packageName, userId);
+        }
         return res ? PackageManager.DELETE_SUCCEEDED : PackageManager.DELETE_FAILED_INTERNAL_ERROR;
+    }
+
+    private void acquireUxPerfLock(int opcode, String pkgName, int dat) {
+        BoostFramework ux_perf = new BoostFramework();
+        if (ux_perf != null) {
+            ux_perf.perfUXEngine_events(opcode, 0, pkgName, dat);
+        }
     }
 
     static class PackageRemovedInfo {
@@ -24758,6 +24954,7 @@ public class PackageManagerService extends IPackageManager.Stub
         }, overlayFilter);
 
         mModuleInfoProvider.systemReady();
+        new BoostFramework(mContext, true);
 
         // Installer service might attempt to install some packages that have been staged for
         // installation on reboot. Make sure this is the last component to be call since the
@@ -25602,7 +25799,7 @@ public class PackageManagerService extends IPackageManager.Stub
         UserManagerInternal umInternal = mInjector.getUserManagerInternal();
         StorageManagerInternal smInternal = mInjector.getLocalService(StorageManagerInternal.class);
         for (UserInfo user : mUserManager.getUsers(false /* includeDying */)) {
-            final int flags;
+            int flags;
             if (StorageManager.isUserKeyUnlocked(user.id)
                     && smInternal.isCeStoragePrepared(user.id)) {
                 flags = StorageManager.FLAG_STORAGE_DE | StorageManager.FLAG_STORAGE_CE;
@@ -25611,9 +25808,12 @@ public class PackageManagerService extends IPackageManager.Stub
             } else {
                 continue;
             }
-
+            if ((vol.disk.flags & DiskInfo.FLAG_UFS_CARD) == DiskInfo.FLAG_UFS_CARD) {
+                flags = flags | DiskInfo.FLAG_UFS_CARD;
+            }
+            final int pflags = flags;
             try {
-                sm.prepareUserStorage(volumeUuid, user.id, user.serialNumber, flags);
+                sm.prepareUserStorage(volumeUuid, user.id, user.serialNumber, pflags);
                 synchronized (mInstallLock) {
                     reconcileAppsDataLI(volumeUuid, user.id, flags, true /* migrateAppData */);
                 }

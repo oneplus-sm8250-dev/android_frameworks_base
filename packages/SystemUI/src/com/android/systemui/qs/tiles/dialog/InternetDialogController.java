@@ -91,6 +91,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
@@ -156,6 +157,10 @@ public class InternetDialogController implements AccessPointController.AccessPoi
     private LocationController mLocationController;
     private DialogLaunchAnimator mDialogLaunchAnimator;
     private boolean mHasWifiEntries;
+    private int mActiveDataSubId = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
+    private int mVoiceCallState = TelephonyManager.CALL_STATE_IDLE;
+    private HashMap<TelephonyManager, NonDdsTelephonyCallback> mNonDdsCallbacks =
+            new HashMap<>();
 
     @VisibleForTesting
     static final float TOAST_PARAMS_HORIZONTAL_WEIGHT = 1.0f;
@@ -256,6 +261,7 @@ public class InternetDialogController implements AccessPointController.AccessPoi
         mSubscriptionManager.addOnSubscriptionsChangedListener(mExecutor,
                 mOnSubscriptionsChangedListener);
         mDefaultDataSubId = getDefaultDataSubscriptionId();
+        mActiveDataSubId = mDefaultDataSubId;
         if (DEBUG) {
             Log.d(TAG, "Init, SubId: " + mDefaultDataSubId);
         }
@@ -263,6 +269,19 @@ public class InternetDialogController implements AccessPointController.AccessPoi
         mTelephonyManager = mTelephonyManager.createForSubscriptionId(mDefaultDataSubId);
         mInternetTelephonyCallback = new InternetTelephonyCallback();
         mTelephonyManager.registerTelephonyCallback(mExecutor, mInternetTelephonyCallback);
+        final List<SubscriptionInfo> subscriptions =
+                mSubscriptionManager.getActiveSubscriptionInfoList();
+        if (subscriptions != null) {
+            NonDdsTelephonyCallback nonDdscallback = new NonDdsTelephonyCallback();
+            for (SubscriptionInfo info : subscriptions) {
+                if (mDefaultDataSubId != info.getSubscriptionId()) {
+                     TelephonyManager tm =
+                             mTelephonyManager.createForSubscriptionId(info.getSubscriptionId());
+                     tm.registerTelephonyCallback(mExecutor, nonDdscallback);
+                     mNonDdsCallbacks.put(tm, nonDdscallback);
+                }
+            }
+        }
         // Listen the connectivity changes
         mConnectivityManager.registerDefaultNetworkCallback(mConnectivityManagerNetworkCallback);
         mCanConfigWifi = canConfigWifi;
@@ -281,6 +300,11 @@ public class InternetDialogController implements AccessPointController.AccessPoi
         mKeyguardUpdateMonitor.removeCallback(mKeyguardUpdateCallback);
         mConnectivityManager.unregisterNetworkCallback(mConnectivityManagerNetworkCallback);
         mConnectedWifiInternetMonitor.unregisterCallback();
+        for (Map.Entry<TelephonyManager, NonDdsTelephonyCallback> entry
+                : mNonDdsCallbacks.entrySet()) {
+            entry.getKey().unregisterTelephonyCallback(entry.getValue());
+        }
+        mNonDdsCallbacks.clear();
     }
 
     @VisibleForTesting
@@ -784,6 +808,11 @@ public class InternetDialogController implements AccessPointController.AccessPoi
         return !mKeyguardStateController.isUnlocked();
     }
 
+    public boolean isInCallOnNonDds() {
+        return mDefaultDataSubId != mActiveDataSubId
+                && mVoiceCallState != TelephonyManager.CALL_STATE_IDLE;
+    }
+
     boolean activeNetworkIsCellular() {
         if (mConnectivityManager == null) {
             if (DEBUG) {
@@ -914,7 +943,8 @@ public class InternetDialogController implements AccessPointController.AccessPoi
             TelephonyCallback.DisplayInfoListener,
             TelephonyCallback.ServiceStateListener,
             TelephonyCallback.SignalStrengthsListener,
-            TelephonyCallback.UserMobileDataStateListener {
+            TelephonyCallback.UserMobileDataStateListener,
+            TelephonyCallback.ActiveDataSubscriptionIdListener {
 
         @Override
         public void onServiceStateChanged(@NonNull ServiceState serviceState) {
@@ -940,6 +970,12 @@ public class InternetDialogController implements AccessPointController.AccessPoi
         @Override
         public void onUserMobileDataStateChanged(boolean enabled) {
             mCallback.onUserMobileDataStateChanged(enabled);
+        }
+
+        @Override
+        public void onActiveDataSubscriptionIdChanged(int subId) {
+            mActiveDataSubId = subId;
+            mCallback.onNonDdsCallStateChanged();
         }
     }
 
@@ -974,6 +1010,15 @@ public class InternetDialogController implements AccessPointController.AccessPoi
         public void onLost(@NonNull Network network) {
             mHasEthernet = false;
             mCallback.onLost(network);
+        }
+    }
+
+    private class NonDdsTelephonyCallback extends TelephonyCallback implements
+            TelephonyCallback.CallStateListener {
+        @Override
+        public void onCallStateChanged(int state) {
+            mVoiceCallState = state;
+            mCallback.onNonDdsCallStateChanged();
         }
     }
 
@@ -1102,6 +1147,8 @@ public class InternetDialogController implements AccessPointController.AccessPoi
 
         void onAccessPointsChanged(@Nullable List<WifiEntry> wifiEntries,
                 @Nullable WifiEntry connectedEntry, boolean hasMoreWifiEntries);
+
+        void onNonDdsCallStateChanged();
     }
 
     void makeOverlayToast(int stringId) {
