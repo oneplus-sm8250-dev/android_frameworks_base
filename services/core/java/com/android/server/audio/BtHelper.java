@@ -466,6 +466,8 @@ public class BtHelper {
             BluetoothDevice btDevice = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
             setBtScoActiveDevice(btDevice);
         } else if (action.equals(BluetoothHeadset.ACTION_AUDIO_STATE_CHANGED)) {
+            boolean broadcast = false;
+            int scoAudioState = AudioManager.SCO_AUDIO_STATE_ERROR;
             int btState = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, -1);
             Log.i(TAG, "receiveBtEvent ACTION_AUDIO_STATE_CHANGED: " + btState);
             switch (btState) {
